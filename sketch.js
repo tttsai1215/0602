@@ -1,5 +1,7 @@
 let pacmans = [];
 let stars = [];
+let particles = []; // 儲存爆炸粒子
+let floatingTexts = []; // 儲存飄浮文字
 const pacmanColors = ['#48cae4', '#90e0ef', '#03045e', '#0077b6', '#caf0f8', '#ade8f4'];
 let lastSpawnTime = 0; // 紀錄上一次產生小精靈的時間
 let score = 0; // 遊戲分數
@@ -48,14 +50,34 @@ function draw() {
     p.display();
   }
   
+  // 更新與顯示爆炸粒子
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].update();
+    particles[i].display();
+    if (particles[i].alpha <= 0) particles.splice(i, 1);
+  }
+
+  // 更新與顯示飄浮文字
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    floatingTexts[i].update();
+    floatingTexts[i].display();
+    if (floatingTexts[i].alpha <= 0) floatingTexts.splice(i, 1);
+  }
+  
   // --- 繪製遊戲 UI (計分板) ---
-  fill(255);
-  noStroke();
+  push();
+  drawingContext.shadowBlur = 4;
+  drawingContext.shadowColor = 'black'; // 替文字加上黑色陰影增加辨識度
+  drawingContext.shadowOffsetX = 2;
+  drawingContext.shadowOffsetY = 2;
   textSize(24);
   textAlign(LEFT, TOP);
   textStyle(BOLD);
+  noStroke();
+  fill(255);
   text(`SCORE: ${score}`, 20, 20);
   text(`PACMANS: ${pacmans.length} / ${maxPacmans}`, 20, 50);
+  pop();
 
   // --- 繪製自訂游標 (獵人準星) ---
   stroke(255, 100);
@@ -72,6 +94,13 @@ function mousePressed() {
   for (let i = pacmans.length - 1; i >= 0; i--) {
     let p = pacmans[i];
     if (dist(mouseX, mouseY, p.x, p.y) < p.r) {
+      // 產生爆炸粒子特效
+      for (let j = 0; j < 20; j++) {
+        particles.push(new Particle(p.x, p.y, p.color));
+      }
+      // 產生飄浮加分文字
+      floatingTexts.push(new FloatingText(p.x, p.y, "+10"));
+      
       pacmans.splice(i, 1); // 移除小精靈
       score += 10; // 獲得分數
       break; // 每次點擊只抓一隻，避免一擊多殺
@@ -81,6 +110,56 @@ function mousePressed() {
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+}
+
+// --- 爆炸粒子類別 ---
+class Particle {
+  constructor(x, y, c) {
+    this.x = x;
+    this.y = y;
+    this.vx = random(-6, 6);
+    this.vy = random(-6, 6);
+    this.color = c;
+    this.alpha = 255; // 初始不透明
+    this.r = random(2, 6); // 粒子大小
+  }
+  
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.alpha -= 8; // 逐漸變透明消散
+  }
+  
+  display() {
+    noStroke();
+    let c = color(this.color);
+    c.setAlpha(this.alpha);
+    fill(c);
+    circle(this.x, this.y, this.r * 2);
+  }
+}
+
+// --- 飄浮文字類別 ---
+class FloatingText {
+  constructor(x, y, txt) {
+    this.x = x;
+    this.y = y;
+    this.txt = txt;
+    this.alpha = 255;
+    this.vy = -2; // 往上飄移的速度
+  }
+  update() {
+    this.y += this.vy;
+    this.alpha -= 5; // 逐漸消失
+  }
+  display() {
+    fill(255, 255, 0, this.alpha); // 黃色文字搭配透明度
+    noStroke();
+    textSize(28);
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    text(this.txt, this.x, this.y);
+  }
 }
 
 // --- 星星類別 ---
