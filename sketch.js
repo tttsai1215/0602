@@ -2,9 +2,12 @@ let pacmans = [];
 let stars = [];
 const pacmanColors = ['#48cae4', '#90e0ef', '#03045e', '#0077b6', '#caf0f8', '#ade8f4'];
 let lastSpawnTime = 0; // 紀錄上一次產生小精靈的時間
+let score = 0; // 遊戲分數
+let maxPacmans = 35; // 限制最大數量避免卡頓
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
+  noCursor(); // 隱藏預設游標，改用自訂的遊戲準星
   
   // 產生背景星星粒子
   for (let i = 0; i < 150; i++) {
@@ -27,7 +30,7 @@ function draw() {
   }
   
   // 每 3 秒鐘 (3000 毫秒) 產生一個新的小精靈
-  if (millis() - lastSpawnTime > 3000) {
+  if (millis() - lastSpawnTime > 3000 && pacmans.length < maxPacmans) {
     pacmans.push(new Pacman());
     lastSpawnTime = millis();
   }
@@ -43,6 +46,36 @@ function draw() {
   for (let p of pacmans) {
     p.update();
     p.display();
+  }
+  
+  // --- 繪製遊戲 UI (計分板) ---
+  fill(255);
+  noStroke();
+  textSize(24);
+  textAlign(LEFT, TOP);
+  textStyle(BOLD);
+  text(`SCORE: ${score}`, 20, 20);
+  text(`PACMANS: ${pacmans.length} / ${maxPacmans}`, 20, 50);
+
+  // --- 繪製自訂游標 (獵人準星) ---
+  stroke(255, 100);
+  strokeWeight(2);
+  noFill();
+  circle(mouseX, mouseY, 30);
+  fill(255, 150);
+  noStroke();
+  circle(mouseX, mouseY, 6);
+}
+
+function mousePressed() {
+  // 點擊抓捕小精靈 (從陣列後面往前找，確保點到最上層的物件)
+  for (let i = pacmans.length - 1; i >= 0; i--) {
+    let p = pacmans[i];
+    if (dist(mouseX, mouseY, p.x, p.y) < p.r) {
+      pacmans.splice(i, 1); // 移除小精靈
+      score += 10; // 獲得分數
+      break; // 每次點擊只抓一隻，避免一擊多殺
+    }
   }
 }
 
@@ -60,6 +93,7 @@ class Star {
     this.vy = random(-1, 1);
     // 亂數顏色
     this.color = color(random(150, 255), random(150, 255), random(150, 255), random(150, 255));
+    this.alphaOffset = random(TWO_PI); // 用於閃爍動畫的時間差
   }
   
   update() {
@@ -74,9 +108,15 @@ class Star {
   }
   
   display() {
+    let currentAlpha = 150 + sin(frameCount * 0.05 + this.alphaOffset) * 105; // 星星呼吸閃爍效果
     noStroke();
-    fill(this.color);
+    let c = color(this.color);
+    c.setAlpha(currentAlpha);
+    fill(c);
+    drawingContext.shadowBlur = 8; // 星星發光效果
+    drawingContext.shadowColor = this.color;
     circle(this.x, this.y, this.r * 2);
+    drawingContext.shadowBlur = 0; // 畫完重置陰影
   }
 }
 
@@ -148,6 +188,16 @@ class Pacman {
       }
     }
     
+    // 小精靈沿路吃星星機制
+    for (let i = stars.length - 1; i >= 0; i--) {
+      let dStar = dist(this.x, this.y, stars[i].x, stars[i].y);
+      if (dStar < this.r) {
+        stars.splice(i, 1); // 刪除被吃掉的星星
+        stars.push(new Star()); // 隨機位置補充一顆新星星
+        this.r = min(this.r + 0.5, 60); // 吃星星會稍微變大，但限制最大半徑避免過肥
+      }
+    }
+
     this.x += this.vx;
     this.y += this.vy;
     
@@ -210,6 +260,10 @@ class Pacman {
 
     noStroke();
     fill(this.color);
+    
+    // 替小精靈加上霓虹發光效果 (驚嚇時發光更強)
+    drawingContext.shadowBlur = isSurprised ? 30 : 15;
+    drawingContext.shadowColor = this.color;
 
     let eyeX = 0;
     let eyeY = -this.r * 0.5;
@@ -222,6 +276,8 @@ class Pacman {
     } else {
       arc(0, 0, this.r * 2, this.r * 2, this.mouthAngle, TWO_PI - this.mouthAngle, PIE); // 一般：缺角笑臉嘴巴
     }
+    
+    drawingContext.shadowBlur = 0; // 重置發光，避免眼睛跟眼球也一起發光糊掉
     
     fill(255); circle(eyeX, eyeY, eyeSize); // 畫白眼白
     fill(0); // 畫黑眼球
