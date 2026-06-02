@@ -1,6 +1,7 @@
 let pacmans = [];
 let stars = [];
 const pacmanColors = ['#48cae4', '#90e0ef', '#03045e', '#0077b6', '#caf0f8', '#ade8f4'];
+let lastSpawnTime = 0; // 紀錄上一次產生小精靈的時間
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -11,7 +12,7 @@ function setup() {
   }
   
   // 產生小精靈(吃豆人)粒子
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < 20; i++) {
     pacmans.push(new Pacman());
   }
 }
@@ -23,6 +24,19 @@ function draw() {
   for (let star of stars) {
     star.update();
     star.display();
+  }
+  
+  // 每 3 秒鐘 (3000 毫秒) 產生一個新的小精靈
+  if (millis() - lastSpawnTime > 3000) {
+    pacmans.push(new Pacman());
+    lastSpawnTime = millis();
+  }
+  
+  // 小精靈互相碰撞與反彈偵測
+  for (let i = 0; i < pacmans.length; i++) {
+    for (let j = i + 1; j < pacmans.length; j++) {
+      pacmans[i].collide(pacmans[j]);
+    }
   }
   
   // 更新與顯示小精靈
@@ -83,6 +97,38 @@ class Pacman {
     
     this.mouthAngle = 0;
     this.mouthDir = 1; // 控制嘴巴開合方向
+    this.history = []; // 紀錄歷史位置，用於脫影效果
+  }
+
+  // 處理與其他小精靈的碰撞
+  collide(other) {
+    let dx = other.x - this.x;
+    let dy = other.y - this.y;
+    let distance = dist(this.x, this.y, other.x, other.y);
+    let minDist = this.r + other.r;
+
+    // 如果距離小於兩者半徑之和，代表發生碰撞
+    if (distance < minDist && distance > 0) {
+      // 1. 分離重疊的物件，避免黏在一起
+      let overlap = minDist - distance;
+      let nx = dx / distance;
+      let ny = dy / distance;
+      
+      this.x -= nx * overlap * 0.5;
+      this.y -= ny * overlap * 0.5;
+      other.x += nx * overlap * 0.5;
+      other.y += ny * overlap * 0.5;
+
+      // 2. 彈性碰撞速度計算 (以半徑當作質量)
+      let kx = this.vx - other.vx;
+      let ky = this.vy - other.vy;
+      let p = 2 * (nx * kx + ny * ky) / (this.r + other.r);
+      
+      this.vx -= p * other.r * nx;
+      this.vy -= p * other.r * ny;
+      other.vx += p * this.r * nx;
+      other.vy += p * this.r * ny;
+    }
   }
 
   update() {
@@ -116,21 +162,55 @@ class Pacman {
     if (this.mouthAngle > PI / 4 || this.mouthAngle < 0) {
       this.mouthDir *= -1;
     }
+
+    // 紀錄軌跡位置
+    this.history.push({ x: this.x, y: this.y, moveAngle: atan2(this.vy, this.vx) });
+    if (this.history.length > 7) { // 保持軌跡長度 (保留7個影格)，數字越大殘影越長
+      this.history.shift(); // 移除最舊的軌跡
+    }
   }
 
   display() {
     let d = dist(mouseX, mouseY, this.x, this.y);
     let moveAngle = atan2(this.vy, this.vx); // 移動面向角度
     let lookAngle = atan2(mouseY - this.y, mouseX - this.x); // 看向滑鼠的角度
+    let isSurprised = d < 150;
+
+    // --- 繪製脫影 (殘影) ---
+    if (isSurprised) {
+      for (let i = 0; i < this.history.length; i++) {
+        let pos = this.history[i];
+        let alpha = map(i, 0, this.history.length, 0, 100); // 越舊的殘影越透明
+        push();
+        translate(pos.x, pos.y);
+        rotate(pos.moveAngle);
+        let c = color(this.color);
+        c.setAlpha(alpha); // 設定殘影透明度
+        fill(c);
+        noStroke();
+        circle(0, 0, this.r * 2);
+        pop();
+      }
+    }
 
     push();
     translate(this.x, this.y);
     rotate(moveAngle); // 讓身體朝向移動方向
     
+    // --- 繪製速度線 (類似風的效果) ---
+    if (isSurprised) {
+      stroke(255, 150); // 白色且半透明的線條
+      strokeWeight(2);
+      strokeCap(ROUND); // 線條兩端圓角
+      // 在物件後方 (因為已經 rotate 所以是 -x 方向) 畫出三條白色風切線
+      line(-this.r * 1.2, -this.r * 0.4, -this.r * 2.5, -this.r * 0.4);
+      line(-this.r * 1.5, 0, -this.r * 3.2, 0);
+      line(-this.r * 1.1, this.r * 0.4, -this.r * 2.2, this.r * 0.4);
+    }
+
     noStroke();
     fill(this.color);
 
-    let isSurprised = d < 150;
     let eyeX = 0;
     let eyeY = -this.r * 0.5;
     let eyeSize = isSurprised ? this.r * 0.7 : this.r * 0.4; // 驚嚇時眼睛放大
