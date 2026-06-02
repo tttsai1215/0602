@@ -119,7 +119,8 @@ class Particle {
     this.y = y;
     this.vx = random(-6, 6);
     this.vy = random(-6, 6);
-    this.color = c;
+    // 混入白色與亮色系，解決深色粒子在黑背景看不清楚的問題
+    this.color = random([c, '#ffffff', '#ffea00', '#00e5ff']);
     this.alpha = 255; // 初始不透明
     this.r = random(2, 6); // 粒子大小
   }
@@ -132,10 +133,16 @@ class Particle {
   
   display() {
     noStroke();
-    let c = color(this.color);
-    c.setAlpha(this.alpha);
-    fill(c);
+    let col = color(this.color);
+    col.setAlpha(this.alpha);
+    fill(col);
+    
+    // 加上發光效果，讓爆破看起來更有張力
+    drawingContext.shadowBlur = 15;
+    drawingContext.shadowColor = this.color;
+    
     circle(this.x, this.y, this.r * 2);
+    drawingContext.shadowBlur = 0; // 畫完重置陰影
   }
 }
 
