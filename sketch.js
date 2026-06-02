@@ -7,7 +7,7 @@ let floatingTexts = []; // 儲存飄浮文字
 const pacmanColors = ['#48cae4', '#90e0ef', '#03045e', '#0077b6', '#caf0f8', '#ade8f4'];
 let lastSpawnTime = 0; // 紀錄上一次產生小精靈的時間
 let score = 0; // 遊戲分數
-let maxPacmans = 35; // 限制最大數量避免卡頓
+let maxPacmans = 60; // 限制最大數量，隨時間增加可容納更多敵人
 
 // --- 新增遊戲機制變數 ---
 let gameState = 'PLAYING'; // 狀態：PLAYING(遊戲中), GAMEOVER(結算)
@@ -36,6 +36,25 @@ function setup() {
 function draw() {
   background(0); // 黑色背景
   
+  // --- 警報警戒效果 (隨著時間逼近越來越紅、閃爍越快) ---
+  let progress = 0;
+  if (gameState === 'PLAYING') {
+    let elapsedTime = millis() - startTime;
+    progress = constrain(elapsedTime / gameDuration, 0, 1); // 遊戲進度 0.0 ~ 1.0
+    
+    if (progress > 0.3) { // 剩下 70% 時間開始有微弱警報，越後面越強烈
+      let freq = map(progress, 0.3, 1, 0.05, 0.4); // 閃爍頻率變快
+      let maxAlpha = map(progress, 0.3, 1, 10, 150); // 紅光變明顯
+      let alarmAlpha = (sin(frameCount * freq) * 0.5 + 0.5) * maxAlpha;
+      push();
+      noStroke();
+      fill(255, 0, 0, alarmAlpha);
+      rectMode(CORNER);
+      rect(0, 0, width, height);
+      pop();
+    }
+  }
+
   // --- 畫面震動 (Screen Shake) 特效 ---
   push();
   if (shakeAmount > 0) {
@@ -52,7 +71,6 @@ function draw() {
   
   if (gameState === 'PLAYING') {
     // 檢查計時器
-    let elapsedTime = millis() - startTime;
     let timeLeft = Math.ceil((gameDuration - elapsedTime) / 1000);
     
     // 檢查連擊 (Combo) 計時，超過 2 秒沒抓到就斷連擊
@@ -64,8 +82,9 @@ function draw() {
       gameState = 'GAMEOVER';
     }
 
-    // 每 3 秒鐘 (3000 毫秒) 產生一個新的小精靈
-    if (millis() - lastSpawnTime > 3000 && pacmans.length < maxPacmans) {
+    // 隨時間縮短產生間隔，從 3 秒降到極端的 0.4 秒 (越後面生越快)
+    let currentSpawnInterval = map(progress, 0, 1, 3000, 400);
+    if (millis() - lastSpawnTime > currentSpawnInterval && pacmans.length < maxPacmans) {
       pacmans.push(new Pacman());
       lastSpawnTime = millis();
     }
@@ -452,7 +471,14 @@ class Pacman {
     this.x = random(this.r, width - this.r);
     this.y = random(this.r, height - this.r);
     
-    let speedMult = this.isRare ? 1.8 : 1; // 稀有種跑得更快
+    // 根據遊戲進度(時間)動態加倍速度
+    let progress = 0;
+    if (gameState === 'PLAYING') {
+      progress = constrain((millis() - startTime) / gameDuration, 0, 1);
+    }
+    let timeSpeedBoost = map(progress, 0, 1, 1, 2.5); // 隨時間最高提升 2.5 倍基礎速度
+
+    let speedMult = (this.isRare ? 1.8 : 1) * timeSpeedBoost; 
     this.vx = random(-3, 3) * speedMult;
     this.vy = random(-3, 3) * speedMult;
     
